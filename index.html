@@ -1,31 +1,120 @@
 <!DOCTYPE html>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 <html>
+
 <head>
-  <meta charset="UTF-8" />
-  <title>Camera Mirror</title>
+  <meta charset="UTF-8">
+  <title>Webcam Mirror</title>
   <style>
     body {
       margin: 0;
       background: #000;
+      color: white;
+      font-family: sans-serif;
     }
-    video {
+
+    #controls {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 2;
+      background: rgba(0, 0, 0, 0.8);
+      padding: 10px;
+      border-radius: 6px;
+    }
+
+    #confirmBtn {
+      margin-left: 10px;
+    }
+
+    #preview {
       position: fixed;
-      top: 0; left: 0;
+      top: 0;
+      left: 0;
       width: 100vw;
       height: 100vh;
       object-fit: cover;
       transform: scaleX(-1);
+      z-index: 1;
     }
   </style>
 </head>
+
 <body>
-  <video autoplay muted playsinline></video>
+  <div id="controls">
+    <label for="cameraSelect">Select Camera:</label>
+    <select id="cameraSelect"></select>
+    <button id="confirmBtn">Confirm</button>
+  </div>
+  <video id="preview" autoplay muted playsinline></video>
+
   <script>
-    navigator.mediaDevices.getUserMedia({ video: true })
-      .then(stream => {
-        document.querySelector('video').srcObject = stream;
-      })
-      .catch(err => alert('Camera error: ' + err));
+    let currentStream = null;
+
+    async function enumerateCameras() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      const videoDevices = devices.filter(d => d.kind === 'videoinput');
+      const select = document.getElementById('cameraSelect');
+      select.innerHTML = '';
+
+      videoDevices.forEach((device, index) => {
+        const option = document.createElement('option');
+        option.value = device.deviceId;
+        option.text = device.label || `Camera ${index + 1}`;
+        select.appendChild(option);
+      });
+
+      return videoDevices;
+    }
+
+    async function startCamera(deviceId) {
+      if (currentStream) {
+        currentStream.getTracks().forEach(track => track.stop());
+      }
+
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: deviceId ? { deviceId: { exact: deviceId } } : true
+        });
+        document.getElementById('preview').srcObject = stream;
+        currentStream = stream;
+      } catch (err) {
+        alert('Camera error: ' + err.name + '\n\n' + err.message);
+      }
+    }
+
+    document.getElementById('cameraSelect').onchange = () => {
+      startCamera(document.getElementById('cameraSelect').value);
+    };
+
+    document.getElementById('confirmBtn').onclick = () => {
+      document.getElementById('controls').style.display = 'none';
+      document.getElementById('preview').style.zIndex = '999';
+    };
+
+    async function init() {
+      try {
+        // Get default stream once
+        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+        document.getElementById('preview').srcObject = stream;
+        currentStream = stream;
+
+        const devices = await enumerateCameras();
+        const trackLabel = stream.getVideoTracks()[0].label;
+        const select = document.getElementById('cameraSelect');
+        for (let option of select.options) {
+          if (option.text === trackLabel) {
+            select.value = option.value;
+            break;
+          }
+        }
+      } catch (err) {
+        alert('Permission denied or camera error: ' + err.name);
+      }
+    }
+
+    init();
   </script>
 </body>
+
 </html>
